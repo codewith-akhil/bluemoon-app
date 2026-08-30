@@ -286,6 +286,22 @@ class TelegramViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    fun createPost(caption: String) {
+        viewModelScope.launch {
+            val user = userSettings.value
+            val newStory = StoryEntity(
+                id = "post_${System.currentTimeMillis()}",
+                userId = "me",
+                userName = user.myName,
+                avatarColorHex = user.avatarColorHex,
+                caption = caption,
+                timestamp = System.currentTimeMillis(),
+                isSeen = false
+            )
+            repository.addStory(newStory)
+        }
+    }
+
     fun createNewChat(title: String, username: String, type: ChatType) {
         viewModelScope.launch {
             val colors = listOf("#2481CC", "#E91E63", "#00C853", "#FF9800", "#9C27B0", "#3F51B5")

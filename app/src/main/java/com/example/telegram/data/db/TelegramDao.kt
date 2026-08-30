@@ -83,6 +83,9 @@ interface TelegramDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertStories(stories: List<StoryEntity>)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertStory(story: StoryEntity)
+
     @Query("UPDATE stories SET isSeen = 1 WHERE id = :storyId")
     suspend fun markStorySeen(storyId: String)
 }

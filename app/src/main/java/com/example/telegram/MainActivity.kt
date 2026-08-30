@@ -18,18 +18,22 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import com.example.telegram.data.models.ChatType
 import com.example.telegram.data.models.MessageType
 import com.example.telegram.ui.components.CreateChatPromptDialog
 import com.example.telegram.ui.components.StartNewChatMenu
+import com.example.telegram.ui.components.TelegramBottomNavBar
 import com.example.telegram.ui.components.TelegramDrawer
 import com.example.telegram.ui.screens.ActiveCallOverlay
 import com.example.telegram.ui.screens.CallsScreen
 import com.example.telegram.ui.screens.ChatListScreen
 import com.example.telegram.ui.screens.ChatScreen
 import com.example.telegram.ui.screens.ContactsScreen
+import com.example.telegram.ui.screens.ProfileScreen
 import com.example.telegram.ui.screens.SettingsScreen
 import com.example.telegram.ui.screens.StoryViewerScreen
 import com.example.telegram.ui.screens.auth.CountryPickerScreen
@@ -283,65 +287,92 @@ fun TelegramApp(viewModel: TelegramViewModel) {
                     )
                 }
 
-                // 3. Main Navigation Destinations
+                // 3. Main Navigation Destinations (Dashboard with Sticky Fixed Bottom Navigation Bar)
                 else -> {
-                    when (currentScreen) {
-                        "chats" -> {
-                            ChatListScreen(
-                                chats = chats,
-                                contacts = contacts,
-                                stories = stories,
-                                selectedFolder = selectedFolder,
-                                searchQuery = searchQuery,
-                                onSelectFolder = { viewModel.setFolder(it) },
-                                onSearchQueryChange = { viewModel.setSearchQuery(it) },
-                                onOpenChat = { chatId -> viewModel.openChat(chatId) },
-                                onContactClick = { contact -> viewModel.openOrCreateChatForContact(contact) },
-                                onOpenStory = { story -> viewModel.openStory(story) },
-                                onOpenDrawer = { scope.launch { drawerState.open() } },
-                                onOpenNewChatMenu = { newChatDialogType = "DIRECT" },
-                                onTogglePin = { id, pin -> viewModel.togglePinChat(id, pin) },
-                                onToggleMute = { id, mute -> viewModel.toggleMuteChat(id, mute) },
-                                onDeleteChat = { id -> viewModel.deleteChat(id) }
-                            )
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        when (currentScreen) {
+                            "chats" -> {
+                                ChatListScreen(
+                                    chats = chats,
+                                    contacts = contacts,
+                                    stories = stories,
+                                    selectedFolder = selectedFolder,
+                                    searchQuery = searchQuery,
+                                    onSelectFolder = { viewModel.setFolder(it) },
+                                    onSearchQueryChange = { viewModel.setSearchQuery(it) },
+                                    onOpenChat = { chatId -> viewModel.openChat(chatId) },
+                                    onContactClick = { contact -> viewModel.openOrCreateChatForContact(contact) },
+                                    onOpenStory = { story -> viewModel.openStory(story) },
+                                    onOpenDrawer = { scope.launch { drawerState.open() } },
+                                    onOpenNewChatMenu = { newChatDialogType = "DIRECT" },
+                                    onTogglePin = { id, pin -> viewModel.togglePinChat(id, pin) },
+                                    onToggleMute = { id, mute -> viewModel.toggleMuteChat(id, mute) },
+                                    onDeleteChat = { id -> viewModel.deleteChat(id) }
+                                )
+                            }
+                            "contacts" -> {
+                                ContactsScreen(
+                                    contacts = contacts,
+                                    isSyncing = isSyncingContacts,
+                                    syncMessage = contactSyncMessage,
+                                    onBack = { currentScreen = "chats" },
+                                    onSyncContacts = { viewModel.syncDeviceContacts(context) },
+                                    onContactClick = { contact ->
+                                        viewModel.openOrCreateChatForContact(contact)
+                                    },
+                                    onAddContact = { name, phone, username ->
+                                        viewModel.addContact(name, phone, username)
+                                    }
+                                )
+                            }
+                            "calls" -> {
+                                CallsScreen(
+                                    calls = calls,
+                                    activeCall = activeCall,
+                                    onBack = { currentScreen = "chats" },
+                                    onStartCall = { userId, userName, avatarColor, isVideo ->
+                                        viewModel.startCall(userId, userName, avatarColor, isVideo)
+                                    },
+                                    onToggleMute = { viewModel.toggleCallMute() },
+                                    onToggleSpeaker = { viewModel.toggleCallSpeaker() },
+                                    onEndCall = { viewModel.endCall() },
+                                    onDeleteCall = { viewModel.deleteCall(it) }
+                                )
+                            }
+                            "settings" -> {
+                                SettingsScreen(
+                                    userSettings = userSettings,
+                                    onBack = { currentScreen = "chats" },
+                                    onUpdateSettings = { viewModel.updateUserSettings(it) },
+                                    onLogOut = { viewModel.logOut() }
+                                )
+                            }
+                            "profile" -> {
+                                ProfileScreen(
+                                    userSettings = userSettings,
+                                    onNavigateToSettings = { currentScreen = "settings" },
+                                    onUpdateSettings = { viewModel.updateUserSettings(it) },
+                                    onLogOut = { viewModel.logOut() },
+                                    onAddPost = { caption -> viewModel.createPost(caption) }
+                                )
+                            }
                         }
-                        "contacts" -> {
-                            ContactsScreen(
-                                contacts = contacts,
-                                isSyncing = isSyncingContacts,
-                                syncMessage = contactSyncMessage,
-                                onBack = { currentScreen = "chats" },
-                                onSyncContacts = { viewModel.syncDeviceContacts(context) },
-                                onContactClick = { contact ->
-                                    viewModel.openOrCreateChatForContact(contact)
-                                },
-                                onAddContact = { name, phone, username ->
-                                    viewModel.addContact(name, phone, username)
-                                }
-                            )
-                        }
-                        "calls" -> {
-                            CallsScreen(
-                                calls = calls,
-                                activeCall = activeCall,
-                                onBack = { currentScreen = "chats" },
-                                onStartCall = { userId, userName, avatarColor, isVideo ->
-                                    viewModel.startCall(userId, userName, avatarColor, isVideo)
-                                },
-                                onToggleMute = { viewModel.toggleCallMute() },
-                                onToggleSpeaker = { viewModel.toggleCallSpeaker() },
-                                onEndCall = { viewModel.endCall() },
-                                onDeleteCall = { viewModel.deleteCall(it) }
-                            )
-                        }
-                        "settings" -> {
-                            SettingsScreen(
-                                userSettings = userSettings,
-                                onBack = { currentScreen = "chats" },
-                                onUpdateSettings = { viewModel.updateUserSettings(it) },
-                                onLogOut = { viewModel.logOut() }
-                            )
-                        }
+
+                        // Fixed Sticky Non-movable Mobile Navigation Bar (Always anchored at bottom)
+                        TelegramBottomNavBar(
+                            selectedTab = if (currentScreen in listOf("chats", "contacts", "settings", "profile")) currentScreen else "chats",
+                            unreadChatsCount = chats.sumOf { it.unreadCount }.let { if (it > 0) it else 215 },
+                            userInitial = userSettings.myName.ifBlank { "S" },
+                            userAvatarColor = try {
+                                Color(android.graphics.Color.parseColor(userSettings.avatarColorHex))
+                            } catch (_: Exception) {
+                                Color(0xFF4CAF50)
+                            },
+                            onTabSelected = { selectedTab ->
+                                currentScreen = selectedTab
+                            },
+                            modifier = Modifier.align(Alignment.BottomCenter)
+                        )
                     }
                 }
             }

@@ -86,10 +86,12 @@ data class CallLogItem(
 )
 
 data class UserSettings(
-    val myName: String = "John Doe",
-    val myUsername: String = "johndoe",
-    val myPhone: String = "+91 98765 43210",
-    val myBio: String = "Exploring the open digital world ✨",
+    val myName: String = "sne...",
+    val myUsername: String = "Sneeeeinuk",
+    val myPhone: String = "+91 9746109569",
+    val myBio: String = "Follow the rules",
+    val avatarColorHex: String = "#4CAF50",
+    val photoUri: String? = null,
     val isDarkMode: Boolean = false,
     val textSize: Float = 16f,
     val chatWallpaper: String = "Classic Doodle",

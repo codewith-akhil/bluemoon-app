@@ -154,6 +154,10 @@ class TelegramRepository(private val database: AppDatabase) {
         dao.markStorySeen(storyId)
     }
 
+    suspend fun addStory(story: StoryEntity) {
+        dao.insertStory(story)
+    }
+
     suspend fun syncDeviceContacts(contacts: List<ContactEntity>) {
         dao.insertContacts(contacts)
     }

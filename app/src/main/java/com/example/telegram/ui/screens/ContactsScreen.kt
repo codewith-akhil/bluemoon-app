@@ -249,6 +249,7 @@ fun ContactsScreen(
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
+                    .padding(bottom = 72.dp)
                     .testTag("contacts_list")
             ) {
                 items(filteredContacts, key = { it.id }) { contact ->
@@ -270,7 +271,7 @@ fun ContactsScreen(
             contentColor = Color.White,
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(20.dp)
+                .padding(bottom = 84.dp, end = 16.dp)
                 .testTag("add_contact_fab")
         ) {
             Icon(Icons.Default.PersonAdd, contentDescription = "Add Contact")

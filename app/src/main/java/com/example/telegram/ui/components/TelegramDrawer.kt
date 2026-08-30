@@ -79,6 +79,10 @@ fun TelegramDrawer(
                     )
                 )
                 .statusBarsPadding()
+                .clickable {
+                    onCloseDrawer()
+                    onNavigate("profile")
+                }
                 .padding(16.dp)
         ) {
             Column {

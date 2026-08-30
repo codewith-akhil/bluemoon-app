@@ -83,6 +83,7 @@ fun SettingsScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
             .verticalScroll(rememberScrollState())
+            .padding(bottom = 76.dp)
             .testTag("settings_screen")
     ) {
         TopAppBar(

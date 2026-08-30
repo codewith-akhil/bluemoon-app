@@ -608,6 +608,7 @@ fun ChatListScreen(
                     LazyColumn(
                         modifier = Modifier
                             .fillMaxSize()
+                            .padding(bottom = 72.dp)
                             .testTag("chats_list")
                     ) {
                         items(chats, key = { it.id }) { chat ->
@@ -628,14 +629,14 @@ fun ChatListScreen(
             }
         }
 
-        // Floating Action Button (New Message)
+        // Floating Action Button (New Message) - Positioned comfortably above the sticky bottom nav
         FloatingActionButton(
             onClick = onOpenNewChatMenu,
             containerColor = TelegramBlue,
             contentColor = Color.White,
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(20.dp)
+                .padding(bottom = 84.dp, end = 16.dp)
                 .testTag("new_message_fab")
         ) {
             Icon(
