@@ -1,0 +1,6 @@
+{
+  "name": "Bluemoon",
+  "description": "Bluemoon Messenger for Android with fast, secure messaging, group chats, channels, secret chats, voice notes, stories, calls, and customizable themes.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
