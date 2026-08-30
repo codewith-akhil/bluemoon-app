@@ -26,6 +26,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Call
@@ -44,12 +47,19 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
@@ -72,6 +82,22 @@ fun OtpVerificationScreen(
 ) {
     var timerSeconds by remember { mutableIntStateOf(60) }
     var isTimerRunning by remember { mutableStateOf(true) }
+    val focusRequester = remember { FocusRequester() }
+
+    var otpTextFieldValue by remember(otpCode) {
+        mutableStateOf(
+            TextFieldValue(
+                text = otpCode,
+                selection = androidx.compose.ui.text.TextRange(otpCode.length)
+            )
+        )
+    }
+
+    LaunchedEffect(Unit) {
+        try {
+            focusRequester.requestFocus()
+        } catch (_: Exception) {}
+    }
 
     // 60-Second Countdown timer
     LaunchedEffect(isTimerRunning, timerSeconds) {
@@ -175,26 +201,60 @@ fun OtpVerificationScreen(
 
             Spacer(modifier = Modifier.height(36.dp))
 
-            // 6-Digit OTP Boxes Row (Matching Screenshot 5)
-            Row(
+            // Hidden real BasicTextField that receives typing & clipboard paste
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .offset(x = if (hasError) shakeOffset.dp else 0.dp)
-                    .padding(horizontal = 4.dp)
-                    .testTag("otp_boxes_row"),
-                horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
-                verticalAlignment = Alignment.CenterVertically
+                    .clickable { focusRequester.requestFocus() },
+                contentAlignment = Alignment.Center
             ) {
-                for (i in 0 until 6) {
-                    val digit = otpCode.getOrNull(i)?.toString() ?: ""
-                    val isFocused = otpCode.length == i || (otpCode.length == 6 && i == 5)
+                BasicTextField(
+                    value = otpTextFieldValue,
+                    onValueChange = { newValue ->
+                        val digits = newValue.text.filter { it.isDigit() }.take(6)
+                        otpTextFieldValue = newValue.copy(text = digits)
+                        onOtpChange(digits)
+                    },
+                    modifier = Modifier
+                        .size(1.dp)
+                        .alpha(0f)
+                        .focusRequester(focusRequester),
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.NumberPassword,
+                        imeAction = ImeAction.Done
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onDone = {
+                            if (otpCode.length == 6) {
+                                onVerifyOtp(otpCode)
+                            }
+                        }
+                    ),
+                    singleLine = true,
+                    textStyle = TextStyle(color = Color.Transparent)
+                )
 
-                    OtpDigitBox(
-                        digit = digit,
-                        isFocused = isFocused && otpCode.length == i,
-                        hasError = hasError,
-                        cursorAlpha = if (isFocused && digit.isEmpty()) cursorAlpha else 0f
-                    )
+                // 6-Digit OTP Boxes Row
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .offset(x = if (hasError) shakeOffset.dp else 0.dp)
+                        .padding(horizontal = 4.dp)
+                        .testTag("otp_boxes_row"),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    for (i in 0 until 6) {
+                        val digit = otpCode.getOrNull(i)?.toString() ?: ""
+                        val isFocused = otpCode.length == i || (otpCode.length == 6 && i == 5)
+
+                        OtpDigitBox(
+                            digit = digit,
+                            isFocused = isFocused && otpCode.length == i,
+                            hasError = hasError,
+                            cursorAlpha = if (isFocused && digit.isEmpty()) cursorAlpha else 0f
+                        )
+                    }
                 }
             }
 

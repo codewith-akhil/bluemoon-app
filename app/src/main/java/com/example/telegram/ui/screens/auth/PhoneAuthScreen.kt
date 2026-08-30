@@ -1,16 +1,22 @@
 package com.example.telegram.ui.screens.auth
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,19 +26,27 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.LightMode
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FloatingActionButton
@@ -43,27 +57,41 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.example.telegram.data.models.Country
 import com.example.telegram.ui.components.TelegramKeypad
+import com.example.telegram.ui.theme.SecretChatGreen
 import com.example.telegram.ui.theme.TelegramBlue
-import com.example.telegram.ui.theme.TelegramLightBlue
+import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 @Composable
 fun PhoneAuthScreen(
@@ -77,8 +105,92 @@ fun PhoneAuthScreen(
     onToggleNightMode: () -> Unit
 ) {
     var showPermissionDialog by remember { mutableStateOf(false) }
+    var validationError by remember { mutableStateOf<String?>(null) }
+    var hasAttemptedSubmit by remember { mutableStateOf(false) }
+    var isInputFocused by remember { mutableStateOf(false) }
 
-    // Format phone number with spaced groups (e.g. 98765 43210)
+    val focusRequester = remember { FocusRequester() }
+    val focusManager = LocalFocusManager.current
+    val coroutineScope = rememberCoroutineScope()
+    val shakeOffset = remember { Animatable(0f) }
+
+    // Synchronize TextFieldValue with external phoneNumber
+    var textFieldValue by remember(phoneNumber) {
+        mutableStateOf(
+            TextFieldValue(
+                text = phoneNumber,
+                selection = androidx.compose.ui.text.TextRange(phoneNumber.length)
+            )
+        )
+    }
+
+    // Auto-focus the input field on first display
+    LaunchedEffect(Unit) {
+        try {
+            focusRequester.requestFocus()
+        } catch (_: Exception) {}
+    }
+
+    // Phone validation helper
+    fun validateNumber(rawNumber: String): String? {
+        val trimmed = rawNumber.filter { it.isDigit() }
+        return when {
+            trimmed.isEmpty() -> "Please enter your mobile phone number"
+            trimmed.length < 7 -> "Phone number is too short (min. 7 digits, ${trimmed.length} entered)"
+            trimmed.length > 15 -> "Phone number is too long (max. 15 digits)"
+            trimmed.all { it == trimmed[0] } && trimmed.length >= 6 -> "Please enter a valid phone number"
+            else -> null
+        }
+    }
+
+    // Validate on input change if user already attempted to submit
+    val isNumberValid = remember(phoneNumber) {
+        validateNumber(phoneNumber) == null
+    }
+
+    fun triggerShake() {
+        coroutineScope.launch {
+            shakeOffset.snapTo(0f)
+            shakeOffset.animateTo(
+                targetValue = 0f,
+                animationSpec = tween(durationMillis = 350)
+            ) {
+                // simple oscillation
+            }
+            // Sequence shake
+            for (i in 0..2) {
+                shakeOffset.animateTo(12f, tween(40))
+                shakeOffset.animateTo(-12f, tween(40))
+            }
+            shakeOffset.animateTo(0f, tween(40))
+        }
+    }
+
+    fun handleAttemptSubmit() {
+        hasAttemptedSubmit = true
+        val error = validateNumber(phoneNumber)
+        if (error != null) {
+            validationError = error
+            triggerShake()
+        } else {
+            validationError = null
+            focusManager.clearFocus()
+            showPermissionDialog = true
+        }
+    }
+
+    // Update phone number handler with digit sanitation
+    fun handleTextUpdate(newText: String) {
+        val sanitized = newText.filter { it.isDigit() }.take(15)
+        onPhoneNumberChange(sanitized)
+        if (hasAttemptedSubmit) {
+            validationError = validateNumber(sanitized)
+        } else if (validationError != null) {
+            validationError = null
+        }
+    }
+
+    // Format phone number with space groups (e.g. 98765 43210)
     val formattedDisplayPhone = remember(phoneNumber) {
         if (phoneNumber.length > 5) {
             "${phoneNumber.take(5)} ${phoneNumber.drop(5)}"
@@ -87,7 +199,7 @@ fun PhoneAuthScreen(
         }
     }
 
-    // Cursor animation
+    // Cursor animation for custom cursor if needed
     val infiniteTransition = rememberInfiniteTransition(label = "cursor")
     val cursorAlpha by infiniteTransition.animateFloat(
         initialValue = 1f,
@@ -144,7 +256,7 @@ fun PhoneAuthScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             // Title
             Text(
@@ -166,7 +278,7 @@ fun PhoneAuthScreen(
                 textAlign = TextAlign.Center
             )
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(26.dp))
 
             // 1. Country Selection Card Field
             Box(
@@ -175,12 +287,12 @@ fun PhoneAuthScreen(
                     .clip(RoundedCornerShape(12.dp))
                     .border(
                         width = 1.dp,
-                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
+                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
                         shape = RoundedCornerShape(12.dp)
                     )
                     .background(MaterialTheme.colorScheme.surface)
                     .clickable(onClick = onOpenCountryPicker)
-                    .padding(horizontal = 16.dp, vertical = 14.dp)
+                    .padding(horizontal = 16.dp, vertical = 13.dp)
                     .testTag("country_picker_selector_card")
             ) {
                 Row(
@@ -210,75 +322,183 @@ fun PhoneAuthScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
-            // 2. Phone Number Input Box (with Active Blue Outline)
+            // 2. Phone Number Input Box (with Full Keyboard & Click-to-Focus support)
+            val boxBorderColor = when {
+                validationError != null -> MaterialTheme.colorScheme.error
+                isNumberValid -> SecretChatGreen
+                isInputFocused -> TelegramBlue
+                else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
+            }
+
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .offset { IntOffset(x = shakeOffset.value.roundToInt(), y = 0) }
                     .clip(RoundedCornerShape(12.dp))
                     .border(
-                        width = 2.dp,
-                        color = TelegramBlue,
+                        width = if (isInputFocused || validationError != null || isNumberValid) 2.dp else 1.dp,
+                        color = boxBorderColor,
                         shape = RoundedCornerShape(12.dp)
                     )
-                    .background(MaterialTheme.colorScheme.surface)
-                    .padding(horizontal = 16.dp, vertical = 14.dp)
+                    .background(
+                        if (validationError != null) MaterialTheme.colorScheme.error.copy(alpha = 0.04f)
+                        else MaterialTheme.colorScheme.surface
+                    )
+                    .clickable { focusRequester.requestFocus() }
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
                     .testTag("phone_number_display_box")
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Country Code Prefix
-                    Text(
-                        text = selectedCountry.dialCode,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+                    // Country Code Prefix (Clickable to switch country)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.clickable(onClick = onOpenCountryPicker)
+                    ) {
+                        Text(
+                            text = selectedCountry.dialCode,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
 
                     Spacer(modifier = Modifier.width(12.dp))
 
-                    // Subtle Vertical Divider
+                    // Vertical Divider
                     Box(
                         modifier = Modifier
                             .width(1.dp)
                             .height(24.dp)
-                            .background(TelegramBlue.copy(alpha = 0.3f))
+                            .background(boxBorderColor.copy(alpha = 0.4f))
                     )
 
                     Spacer(modifier = Modifier.width(12.dp))
 
-                    // Phone Number text / placeholder + Cursor
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f)
+                    // Real BasicTextField for direct physical, software keyboard & clipboard input
+                    Box(
+                        modifier = Modifier.weight(1f),
+                        contentAlignment = Alignment.CenterStart
                     ) {
                         if (phoneNumber.isEmpty()) {
                             Text(
-                                text = "00000 00000",
-                                fontSize = 18.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
-                            )
-                        } else {
-                            Text(
-                                text = formattedDisplayPhone,
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = MaterialTheme.colorScheme.onSurface
+                                text = "Mobile number",
+                                fontSize = 17.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
                             )
                         }
 
-                        // Blinking Cursor
-                        Box(
+                        BasicTextField(
+                            value = textFieldValue,
+                            onValueChange = { newValue ->
+                                val digitsOnly = newValue.text.filter { it.isDigit() }.take(15)
+                                textFieldValue = newValue.copy(text = digitsOnly)
+                                handleTextUpdate(digitsOnly)
+                            },
                             modifier = Modifier
-                                .padding(start = 2.dp)
-                                .width(2.dp)
-                                .height(22.dp)
-                                .background(TelegramBlue.copy(alpha = cursorAlpha))
+                                .fillMaxWidth()
+                                .focusRequester(focusRequester)
+                                .onFocusChanged { isInputFocused = it.isFocused }
+                                .testTag("phone_number_text_field"),
+                            textStyle = TextStyle(
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            ),
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Phone,
+                                imeAction = ImeAction.Done
+                            ),
+                            keyboardActions = KeyboardActions(
+                                onDone = {
+                                    handleAttemptSubmit()
+                                }
+                            ),
+                            cursorBrush = SolidColor(TelegramBlue)
                         )
                     }
+
+                    // Trailing Status / Clear Button
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (isNumberValid && validationError == null) {
+                            Icon(
+                                imageVector = Icons.Default.CheckCircle,
+                                contentDescription = "Valid Number",
+                                tint = SecretChatGreen,
+                                modifier = Modifier
+                                    .size(20.dp)
+                                    .padding(end = 4.dp)
+                            )
+                        }
+
+                        if (phoneNumber.isNotEmpty()) {
+                            IconButton(
+                                onClick = {
+                                    handleTextUpdate("")
+                                    focusRequester.requestFocus()
+                                },
+                                modifier = Modifier
+                                    .size(28.dp)
+                                    .testTag("clear_phone_number_btn")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Clear",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Validation Error Banner with smooth animation
+            AnimatedVisibility(
+                visible = validationError != null,
+                enter = fadeIn() + slideInVertically(),
+                exit = fadeOut() + slideOutVertically()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 6.dp, start = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ErrorOutline,
+                        contentDescription = "Error",
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = validationError ?: "",
+                        color = MaterialTheme.colorScheme.error,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+
+            // Digit counter & guidance when typing
+            if (validationError == null && phoneNumber.isNotEmpty()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 4.dp, end = 4.dp),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    Text(
+                        text = "${phoneNumber.length} digits",
+                        fontSize = 12.sp,
+                        color = if (isNumberValid) SecretChatGreen else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
 
@@ -288,16 +508,12 @@ fun PhoneAuthScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(end = 8.dp, bottom = 12.dp),
+                    .padding(end = 8.dp, bottom = 8.dp),
                 horizontalArrangement = Arrangement.End
             ) {
                 FloatingActionButton(
-                    onClick = {
-                        if (phoneNumber.length >= 4) {
-                            showPermissionDialog = true
-                        }
-                    },
-                    containerColor = TelegramBlue,
+                    onClick = { handleAttemptSubmit() },
+                    containerColor = if (isNumberValid) TelegramBlue else TelegramBlue.copy(alpha = 0.7f),
                     contentColor = Color.White,
                     shape = CircleShape,
                     elevation = FloatingActionButtonDefaults.elevation(4.dp),
@@ -314,27 +530,27 @@ fun PhoneAuthScreen(
                 }
             }
 
-            // In-app numeric keypad
+            // On-screen numeric keypad (fully linked to state)
             TelegramKeypad(
                 onDigitClick = { digit ->
                     if (phoneNumber.length < 15) {
-                        onPhoneNumberChange(phoneNumber + digit)
+                        handleTextUpdate(phoneNumber + digit)
                     }
                 },
                 onDeleteClick = {
                     if (phoneNumber.isNotEmpty()) {
-                        onPhoneNumberChange(phoneNumber.dropLast(1))
+                        handleTextUpdate(phoneNumber.dropLast(1))
                     }
                 },
                 onClearAll = {
-                    onPhoneNumberChange("")
+                    handleTextUpdate("")
                 }
             )
 
             Spacer(modifier = Modifier.height(10.dp))
         }
 
-        // Call Log / SMS Automatic Verification Permission Dialog (Screenshot 4)
+        // Call Log / SMS Automatic Verification Permission Dialog
         if (showPermissionDialog) {
             Dialog(onDismissRequest = { showPermissionDialog = false }) {
                 Card(
@@ -367,7 +583,7 @@ fun PhoneAuthScreen(
                                 .padding(24.dp)
                         ) {
                             Text(
-                                text = "Please allow Bluemoon to read the call log so that we can automatically enter your code for you.",
+                                text = "Please allow Bluemoon to send and read the verification SMS code to automatically sign you in securely.",
                                 fontSize = 15.sp,
                                 lineHeight = 22.sp,
                                 color = MaterialTheme.colorScheme.onSurface
