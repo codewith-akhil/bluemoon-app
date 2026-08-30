@@ -62,6 +62,7 @@ dependencies {
     ksp(libs.androidx.room.compiler)
     
     implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.coil.compose)
 
     debugImplementation(libs.androidx.ui.tooling)
 }

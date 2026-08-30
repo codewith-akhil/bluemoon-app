@@ -1,5 +1,15 @@
 package com.example.telegram.ui.screens
 
+import android.Manifest
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -14,13 +24,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ContactPhone
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -32,6 +43,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -44,26 +56,41 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.telegram.data.contacts.ContactSyncHelper
 import com.example.telegram.data.db.ContactEntity
-import com.example.telegram.data.models.ChatType
+import com.example.telegram.ui.components.ContactAvatar
 import com.example.telegram.ui.theme.TelegramBlue
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ContactsScreen(
     contacts: List<ContactEntity>,
+    isSyncing: Boolean = false,
+    syncMessage: String? = null,
     onBack: () -> Unit,
+    onSyncContacts: () -> Unit = {},
     onContactClick: (ContactEntity) -> Unit,
     onAddContact: (name: String, phone: String, username: String) -> Unit
 ) {
+    val context = LocalContext.current
     var searchQuery by remember { mutableStateOf("") }
     var isSearchActive by remember { mutableStateOf(false) }
     var showAddDialog by remember { mutableStateOf(false) }
+
+    // Permission launcher for READ_CONTACTS
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        onSyncContacts()
+    }
 
     val filteredContacts = remember(contacts, searchQuery) {
         if (searchQuery.isEmpty()) contacts
@@ -117,14 +144,32 @@ fun ContactsScreen(
                     )
                 }
             } else {
+                val infiniteTransition = rememberInfiniteTransition(label = "contacts_sync_spin")
+                val angle by infiniteTransition.animateFloat(
+                    initialValue = 0f,
+                    targetValue = 360f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(800, easing = LinearEasing),
+                        repeatMode = RepeatMode.Restart
+                    ),
+                    label = "sync_angle"
+                )
+
                 TopAppBar(
                     title = {
-                        Text(
-                            text = "Contacts",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 20.sp,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
+                        Column {
+                            Text(
+                                text = "Contacts",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 20.sp,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "${contacts.size} contacts",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     },
                     navigationIcon = {
                         IconButton(
@@ -139,6 +184,24 @@ fun ContactsScreen(
                         }
                     },
                     actions = {
+                        IconButton(
+                            onClick = {
+                                if (ContactSyncHelper.hasContactsPermission(context)) {
+                                    onSyncContacts()
+                                } else {
+                                    permissionLauncher.launch(Manifest.permission.READ_CONTACTS)
+                                }
+                            },
+                            modifier = Modifier.testTag("contacts_sync_btn")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Sync,
+                                contentDescription = "Sync Contacts",
+                                tint = TelegramBlue,
+                                modifier = if (isSyncing) Modifier.rotate(angle) else Modifier
+                            )
+                        }
+
                         IconButton(onClick = { isSearchActive = true }) {
                             Icon(
                                 imageVector = Icons.Default.Search,
@@ -153,6 +216,36 @@ fun ContactsScreen(
                 )
             }
 
+            // Sync Banner Feedback
+            AnimatedVisibility(visible = syncMessage != null) {
+                Surface(
+                    color = TelegramBlue.copy(alpha = 0.12f),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ContactPhone,
+                            contentDescription = null,
+                            tint = TelegramBlue,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = syncMessage ?: "",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = TelegramBlue
+                        )
+                    }
+                }
+            }
+
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
@@ -165,7 +258,7 @@ fun ContactsScreen(
                     )
                     Divider(
                         modifier = Modifier.padding(start = 72.dp),
-                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
+                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)
                     )
                 }
             }
@@ -248,12 +341,6 @@ fun ContactItemRow(
     contact: ContactEntity,
     onClick: () -> Unit
 ) {
-    val avatarColor = try {
-        Color(android.graphics.Color.parseColor(contact.avatarColorHex))
-    } catch (e: Exception) {
-        TelegramBlue
-    }
-
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -262,48 +349,59 @@ fun ContactItemRow(
             .testTag("contact_item_${contact.id}"),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(
-            modifier = Modifier
-                .size(46.dp)
-                .clip(CircleShape)
-                .background(avatarColor),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = contact.name.take(1).uppercase(),
-                color = Color.White,
-                fontWeight = FontWeight.Bold,
-                fontSize = 18.sp
-            )
-
-            if (contact.isOnline) {
-                Box(
-                    modifier = Modifier
-                        .size(12.dp)
-                        .clip(CircleShape)
-                        .background(Color(0xFF4CAF50))
-                        .align(Alignment.BottomEnd)
-                )
-            }
-        }
+        ContactAvatar(
+            name = contact.name,
+            avatarColorHex = contact.avatarColorHex,
+            photoUri = contact.photoUri,
+            size = 46.dp,
+            isOnline = contact.isOnline,
+            showOnlineDot = true
+        )
 
         Spacer(modifier = Modifier.width(14.dp))
 
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = contact.name,
-                fontWeight = FontWeight.Bold,
+                fontWeight = FontWeight.SemiBold,
                 fontSize = 16.sp,
-                color = MaterialTheme.colorScheme.onSurface
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
 
             Spacer(modifier = Modifier.height(2.dp))
 
-            Text(
-                text = if (contact.isOnline) "online" else contact.lastSeenText,
-                fontSize = 13.sp,
-                color = if (contact.isOnline) TelegramBlue else MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = if (contact.phoneNumber.isNotBlank()) contact.phoneNumber else "@${contact.username}",
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                if (contact.isDeviceContact) {
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(TelegramBlue.copy(alpha = 0.12f))
+                            .padding(horizontal = 5.dp, vertical = 1.dp)
+                    ) {
+                        Text(
+                            text = "Device",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TelegramBlue
+                        )
+                    }
+                }
+            }
         }
+
+        Text(
+            text = if (contact.isOnline) "online" else contact.lastSeenText,
+            fontSize = 12.sp,
+            color = if (contact.isOnline) TelegramBlue else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+        )
     }
 }

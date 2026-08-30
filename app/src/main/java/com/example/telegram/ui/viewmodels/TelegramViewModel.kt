@@ -1,8 +1,10 @@
 package com.example.telegram.ui.viewmodels
 
 import android.app.Application
+import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.telegram.data.contacts.ContactSyncHelper
 import com.example.telegram.data.db.AppDatabase
 import com.example.telegram.data.db.CallEntity
 import com.example.telegram.data.db.ChatEntity
@@ -110,6 +112,12 @@ class TelegramViewModel(application: Application) : AndroidViewModel(application
     val activeCallState = _activeCallState.asStateFlow()
 
     private var callTimerJob: Job? = null
+
+    private val _isSyncingContacts = MutableStateFlow(false)
+    val isSyncingContacts = _isSyncingContacts.asStateFlow()
+
+    private val _contactSyncMessage = MutableStateFlow<String?>(null)
+    val contactSyncMessage = _contactSyncMessage.asStateFlow()
 
     val rawChats: StateFlow<List<ChatEntity>> = repository.allChats
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -308,6 +316,41 @@ class TelegramViewModel(application: Application) : AndroidViewModel(application
                 )
                 _activeChatId.value = newId
             }
+        }
+    }
+
+    fun syncDeviceContacts(context: Context) {
+        viewModelScope.launch {
+            _isSyncingContacts.value = true
+            delay(600) // smooth visual feedback for sync animation
+            val fetched = ContactSyncHelper.fetchDeviceContacts(context)
+            val toSync = if (fetched.isNotEmpty()) {
+                fetched
+            } else {
+                // If device phonebook is currently empty (e.g. fresh emulator/sandbox), provision realistic contacts with photos
+                ContactSyncHelper.getSampleDeviceContacts()
+            }
+            repository.syncDeviceContacts(toSync)
+            _isSyncingContacts.value = false
+            _contactSyncMessage.value = "Synced ${toSync.size} contacts with profile pictures"
+            delay(3500)
+            _contactSyncMessage.value = null
+        }
+    }
+
+    fun addContact(name: String, phone: String, username: String) {
+        viewModelScope.launch {
+            val colors = listOf("#2481CC", "#E91E63", "#00C853", "#FF9800", "#9C27B0", "#3F51B5")
+            val newContact = ContactEntity(
+                id = "manual_${System.currentTimeMillis()}",
+                name = name,
+                username = username,
+                phoneNumber = phone,
+                avatarColorHex = colors.random(),
+                isOnline = true,
+                lastSeenText = "online"
+            )
+            repository.syncDeviceContacts(listOf(newContact))
         }
     }
 

@@ -52,12 +52,14 @@ data class MessageEntity(
 data class ContactEntity(
     @PrimaryKey val id: String,
     val name: String,
-    val username: String,
-    val phoneNumber: String,
+    val username: String = "",
+    val phoneNumber: String = "",
     val bio: String = "",
     val avatarColorHex: String = "#2481CC",
     val isOnline: Boolean = false,
-    val lastSeenText: String = "recently"
+    val lastSeenText: String = "recently",
+    val photoUri: String? = null,
+    val isDeviceContact: Boolean = false
 )
 
 @Entity(tableName = "calls")

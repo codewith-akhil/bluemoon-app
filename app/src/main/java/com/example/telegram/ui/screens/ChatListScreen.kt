@@ -77,6 +77,7 @@ import com.example.telegram.data.db.ChatEntity
 import com.example.telegram.data.db.ContactEntity
 import com.example.telegram.data.db.StoryEntity
 import com.example.telegram.data.models.ChatType
+import com.example.telegram.ui.components.ContactAvatar
 import com.example.telegram.ui.components.StoryBar
 import com.example.telegram.ui.theme.SecretChatGreen
 import com.example.telegram.ui.theme.TelegramBlue
@@ -650,12 +651,6 @@ fun SuggestedContactItem(
     contact: ContactEntity,
     onClick: () -> Unit
 ) {
-    val avatarColor = try {
-        Color(android.graphics.Color.parseColor(contact.avatarColorHex))
-    } catch (e: Exception) {
-        TelegramBlue
-    }
-
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
@@ -664,29 +659,14 @@ fun SuggestedContactItem(
             .width(62.dp)
             .testTag("suggested_contact_${contact.id}")
     ) {
-        Box(
-            modifier = Modifier
-                .size(48.dp)
-                .clip(CircleShape)
-                .background(avatarColor),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = contact.name.take(1).uppercase(),
-                color = Color.White,
-                fontWeight = FontWeight.Bold,
-                fontSize = 18.sp
-            )
-            if (contact.isOnline) {
-                Box(
-                    modifier = Modifier
-                        .size(12.dp)
-                        .clip(CircleShape)
-                        .background(Color(0xFF4CAF50))
-                        .align(Alignment.BottomEnd)
-                )
-            }
-        }
+        ContactAvatar(
+            name = contact.name,
+            avatarColorHex = contact.avatarColorHex,
+            photoUri = contact.photoUri,
+            size = 48.dp,
+            isOnline = contact.isOnline,
+            showOnlineDot = true
+        )
         Spacer(modifier = Modifier.height(4.dp))
         Text(
             text = contact.name.split(" ").firstOrNull() ?: contact.name,
@@ -704,12 +684,6 @@ fun SearchContactItemRow(
     contact: ContactEntity,
     onClick: () -> Unit
 ) {
-    val avatarColor = try {
-        Color(android.graphics.Color.parseColor(contact.avatarColorHex))
-    } catch (e: Exception) {
-        TelegramBlue
-    }
-
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -718,29 +692,14 @@ fun SearchContactItemRow(
             .testTag("search_contact_${contact.id}"),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(
-            modifier = Modifier
-                .size(50.dp)
-                .clip(CircleShape)
-                .background(avatarColor),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = contact.name.take(1).uppercase(),
-                color = Color.White,
-                fontWeight = FontWeight.Bold,
-                fontSize = 19.sp
-            )
-            if (contact.isOnline) {
-                Box(
-                    modifier = Modifier
-                        .size(13.dp)
-                        .clip(CircleShape)
-                        .background(Color(0xFF4CAF50))
-                        .align(Alignment.BottomEnd)
-                )
-            }
-        }
+        ContactAvatar(
+            name = contact.name,
+            avatarColorHex = contact.avatarColorHex,
+            photoUri = contact.photoUri,
+            size = 50.dp,
+            isOnline = contact.isOnline,
+            showOnlineDot = true
+        )
 
         Spacer(modifier = Modifier.width(14.dp))
 
@@ -793,12 +752,6 @@ fun ChatItemRow(
 ) {
     var showContextMenu by remember { mutableStateOf(false) }
 
-    val avatarColor = try {
-        Color(android.graphics.Color.parseColor(chat.avatarColorHex))
-    } catch (e: Exception) {
-        TelegramBlue
-    }
-
     val timeString = remember(chat.lastMessageTime) {
         val sdf = SimpleDateFormat("HH:mm", Locale.getDefault())
         sdf.format(Date(chat.lastMessageTime))
@@ -817,40 +770,15 @@ fun ChatItemRow(
             .testTag("chat_row_${chat.id}"),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Avatar with Online dot / Saved Messages icon
-        Box(
-            modifier = Modifier
-                .size(54.dp)
-                .clip(CircleShape)
-                .background(avatarColor),
-            contentAlignment = Alignment.Center
-        ) {
-            if (chat.type == ChatType.SAVED_MESSAGES) {
-                Icon(
-                    imageVector = Icons.Default.Bookmark,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(26.dp)
-                )
-            } else {
-                Text(
-                    text = chat.title.take(1).uppercase(),
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 20.sp
-                )
-            }
-
-            if (chat.isOnline) {
-                Box(
-                    modifier = Modifier
-                        .size(14.dp)
-                        .clip(CircleShape)
-                        .background(Color(0xFF4CAF50))
-                        .align(Alignment.BottomEnd)
-                )
-            }
-        }
+        ContactAvatar(
+            name = chat.title,
+            avatarColorHex = chat.avatarColorHex,
+            photoUri = null,
+            size = 54.dp,
+            isOnline = chat.isOnline,
+            showOnlineDot = true,
+            isSavedMessages = chat.type == ChatType.SAVED_MESSAGES
+        )
 
         Spacer(modifier = Modifier.width(14.dp))
 

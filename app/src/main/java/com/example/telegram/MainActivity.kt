@@ -19,9 +19,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import com.example.telegram.data.models.ChatType
 import com.example.telegram.data.models.MessageType
-import com.example.telegram.ui.components.NewChatDialog
+import com.example.telegram.ui.components.CreateChatPromptDialog
+import com.example.telegram.ui.components.StartNewChatMenu
 import com.example.telegram.ui.components.TelegramDrawer
 import com.example.telegram.ui.screens.ActiveCallOverlay
 import com.example.telegram.ui.screens.CallsScreen
@@ -169,6 +171,7 @@ fun TelegramApp(viewModel: TelegramViewModel) {
     }
 
     // Main App Navigation & Drawer
+    val context = LocalContext.current
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
 
@@ -178,6 +181,8 @@ fun TelegramApp(viewModel: TelegramViewModel) {
     val chats by viewModel.filteredChats.collectAsState()
     val stories by viewModel.allStories.collectAsState()
     val contacts by viewModel.allContacts.collectAsState()
+    val isSyncingContacts by viewModel.isSyncingContacts.collectAsState()
+    val contactSyncMessage by viewModel.contactSyncMessage.collectAsState()
     val calls by viewModel.allCalls.collectAsState()
     val selectedFolder by viewModel.selectedFolder.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
@@ -303,12 +308,15 @@ fun TelegramApp(viewModel: TelegramViewModel) {
                         "contacts" -> {
                             ContactsScreen(
                                 contacts = contacts,
+                                isSyncing = isSyncingContacts,
+                                syncMessage = contactSyncMessage,
                                 onBack = { currentScreen = "chats" },
+                                onSyncContacts = { viewModel.syncDeviceContacts(context) },
                                 onContactClick = { contact ->
-                                    viewModel.openChat(contact.id)
+                                    viewModel.openOrCreateChatForContact(contact)
                                 },
                                 onAddContact = { name, phone, username ->
-                                    viewModel.createNewChat(name, username, ChatType.DIRECT)
+                                    viewModel.addContact(name, phone, username)
                                 }
                             )
                         }
@@ -350,14 +358,39 @@ fun TelegramApp(viewModel: TelegramViewModel) {
         }
     }
 
-    // New Chat / Group / Channel / Secret Chat Dialog
+    // Start New Chat Menu / Channel / Group / Secret Chat Dialog
     if (newChatDialogType != null) {
-        NewChatDialog(
-            initialType = newChatDialogType!!,
-            onDismiss = { newChatDialogType = null },
-            onCreate = { title, username, type ->
-                viewModel.createNewChat(title, username, type)
+        if (newChatDialogType == "MENU" || newChatDialogType == "DIRECT") {
+            StartNewChatMenu(
+                contacts = contacts,
+                isSyncing = isSyncingContacts,
+                syncMessage = contactSyncMessage,
+                onDismiss = { newChatDialogType = null },
+                onSyncContacts = { viewModel.syncDeviceContacts(context) },
+                onContactClick = { contact ->
+                    viewModel.openOrCreateChatForContact(contact)
+                    newChatDialogType = null
+                },
+                onCreateChat = { title, username, type ->
+                    viewModel.createNewChat(title, username, type)
+                    newChatDialogType = null
+                }
+            )
+        } else {
+            val type = when (newChatDialogType) {
+                "SECRET" -> ChatType.SECRET
+                "CHANNEL" -> ChatType.CHANNEL
+                "GROUP" -> ChatType.GROUP
+                else -> ChatType.DIRECT
             }
-        )
+            CreateChatPromptDialog(
+                type = type,
+                onDismiss = { newChatDialogType = null },
+                onCreate = { title, username, createdType ->
+                    viewModel.createNewChat(title, username, createdType)
+                    newChatDialogType = null
+                }
+            )
+        }
     }
 }
